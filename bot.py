@@ -93,6 +93,46 @@ Nechta dona kerakligini yozing 👇""")
 
 📩 Buyurtma uchun:
 Ism + Telefon + Manzil qoldiring""")
+import openai
+import os
+import base64
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    file_info = bot.get_file(message.photo[-1].file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    with open("image.jpg", "wb") as f:
+        f.write(downloaded_file)
+
+    bot.send_message(message.chat.id, "⏳ Rasmni analiz qilyapman...")
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Bu rasmni biznes nuqtai nazardan tushuntir"},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/jpeg;base64," + encode_image("image.jpg")
+                        }
+                    }
+                ]
+            }
+        ]
+    )
+
+    bot.send_message(message.chat.id, response['choices'][0]['message']['content'])
 
 
 bot.polling()
