@@ -75,45 +75,37 @@ O'lchamini yozing (masalan: 2x3) 👇""")
 Ism + Telefon + Manzil qoldiring""")
 
 
-# 📸 IMAGE + AI ANALYSIS
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     bot.send_message(message.chat.id, "⏳ Rasmni analiz qilyapman...")
 
     try:
-        # Telegramdan rasm olish
+        import base64
+
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
 
-        # base64 ga o‘tkazish
         image_base64 = base64.b64encode(downloaded_file).decode("utf-8")
 
-        # OpenAI ga yuborish
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Bu rasmda nima bor? Agar reklama yoki dizayn bo‘lsa, qisqa qilib tushuntir."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}"
-                            }
-                        }
-                    ]
-                }
-            ]
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "Bu rasmda nima bor? Agar bu reklama yoki dizayn bo‘lsa, qisqa tushuntir."},
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{image_base64}"
+                    }
+                ]
+            }]
         )
 
-        answer = response.choices[0].message.content
-
+        answer = response.output_text
         bot.send_message(message.chat.id, f"📸 Natija:\n{answer}")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xatolik:\n{e}")
-
 
 print("Bot ishga tushdi...")
 bot.infinity_polling()
