@@ -1,88 +1,115 @@
 import telebot
 
-BOT_TOKEN = "8763718986:AAFaVGHQe-QiG1waO24-ZH5jY4-t9FcRWnA"
+<?php
 
-import telebot
-import os
-import re
-from openai import OpenAI
+// ====== CONFIG ======
+$BOT_TOKEN = "8763718986:AAFaVGHQe-QiG1waO24-ZH5jY4-t9FcRWnA";
+$ADMIN_CHAT_ID = "7591567094:AAF1buYRC6-Rz00FLDwSJ_6cnF299fML84k"; // lead keladigan joy
+$OPENAI_API_KEY = "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";
 
-BOT_TOKEN = os.getenv("8763718986:AAFaVGHQe-QiG1waO24-ZH5jY4-t9FcRWnA")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+// ====== UPDATE ======
+$update = json_decode(file_get_contents("php://input"), TRUE);
+$message = $update["message"]["text"] ?? "";
+$chat_id = $update["message"]["chat"]["id"] ?? "";
+$name = $update["message"]["from"]["first_name"] ?? "";
 
-bot = telebot.TeleBot(BOT_TOKEN)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+// ====== SEND FUNCTION ======
+function sendMessage($chat_id, $text){
+    global $BOT_TOKEN;
+    file_get_contents("https://api.telegram.org/bot$BOT_TOKEN/sendMessage?chat_id=$chat_id&text=".urlencode($text));
+}
 
-user_data = {}
+// ====== AI FUNCTION ======
+function askAI($text){
+    global $OPENAI_API_KEY;
 
-# START
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id,
-                     "👋 Assalomu alaykum!\n\n📸 Rasm yuboring yoki savolingizni yozing")
+    $data = [
+        "model" => "gpt-4.1-mini",
+        "messages" => [
+            [
+                "role" => "system",
+                "content" => "You are TOGO GROUP PRO AI sales bot. 
+Respond in user's language. 
+You calculate prices:
+- 3D letters: 9000 so'm per cm
+- Banner: 35000 so'm per m2
+- Lightbox: 1500000 so'm per m2
+- Vizitka: 100 dona = 80000 so'm
+Ask minimal questions. Sell and close."
+            ],
+            ["role" => "user", "content" => $text]
+        ]
+    ];
 
-# 📸 RASM
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    file_info = bot.get_file(message.photo[-1].file_id)
-    file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+    $ch = curl_init("https://api.openai.com/v1/chat/completions");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Content-Type: application/json",
+        "Authorization: Bearer $OPENAI_API_KEY"
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 
-    bot.send_message(message.chat.id, "⏳ Rasmni analiz qilyapman...")
+    $response = curl_exec($ch);
+    $res = json_decode($response, true);
 
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[{
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": "Bu rasmni analiz qil. Bu reklama joyimi? Qanday dizayn qilish mumkin?"},
-                {"type": "input_image", "image_url": file_url}
-            ]
-        }]
-    )
+    return $res["choices"][0]["message"]["content"] ?? "Xatolik";
+}
 
-    bot.send_message(message.chat.id, response.output_text + "\n\n✍️ Nima yozamiz?")
+// ====== PRICE LOGIC (manual) ======
+function calculatePrice($text){
+    $text = strtolower($text);
 
-# 🧠 AI CHAT (tilni o‘zi aniqlaydi)
-@bot.message_handler(func=lambda m: True)
-def ai_chat(message):
-    text = message.text
+    // abyomni bukva
+    if(preg_match('/(\d+)\s*sm/', $text, $h) && preg_match('/(\d+)\s*ta/', $text, $c)){
+        $height = intval($h[1]);
+        $count = intval($c[1]);
+        $price = $height * 9000 * $count;
+        return "💡 Hisob:\n$height sm × $count ta = ".number_format($price,0," "," ")." so‘m";
+    }
 
-    # 📞 Telefon aniqlash
-    if re.search(r'\+?\d{9,13}', text):
-        user_data[message.chat.id] = text
+    // banner
+    if(preg_match('/(\d+)\s*x\s*(\d+)/', $text, $m)){
+        $m2 = $m[1] * $m[2];
+        $price = $m2 * 35000;
+        return "🟨 Banner:\n$m2 m² = ".number_format($price,0," "," ")." so‘m";
+    }
 
-        bot.send_message(message.chat.id, "✅ Rahmat! Tez orada bog‘lanamiz")
+    // vizitka
+    if(strpos($text, "vizitka") !== false){
+        return "📊 100 dona vizitka = 80 000 so‘m\nNechta kerak?";
+    }
 
-        bot.send_message(ADMIN_CHAT_ID,
-                         f"🔥 Yangi lead!\n\n👤 ID: {message.chat.id}\n📞 Tel: {text}")
-        return
+    return null;
+}
 
-    # 💰 Narx (agar o‘lcham yozsa)
-    if re.search(r'\d+\s*sm', text.lower()):
-        size = int(re.findall(r'\d+', text)[0])
-        price = size * 9000
+// ====== MAIN ======
 
-        bot.send_message(message.chat.id,
-                         f"💰 Narx: {price:,} so‘m\n\n📞 Telefoningizni yozing")
-        return
+if($message){
 
-    # 🤖 AI javob
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=f"""
-Foydalanuvchiga o‘z tilida javob ber.
+    // salomlashish
+    if($message == "/start"){
+        sendMessage($chat_id, "Assalomu alaykum! TOGO GROUP PRO 🤖\nQanday reklama kerak?");
+        exit;
+    }
 
-Sen reklama kompaniyasi yordamchisisan (TOGO GROUP PRO).
+    // avval hisoblashga harakat
+    $calc = calculatePrice($message);
 
-Qisqa, sotuvchi stilida yoz.
-Oxirida buyurtmaga yo‘naltir.
+    if($calc){
+        sendMessage($chat_id, $calc);
+    } else {
+        // AI javob
+        $ai = askAI($message);
+        sendMessage($chat_id, $ai);
+    }
 
-Savol: {text}
-"""
-    )
+    // ===== LEAD =====
+    if(preg_match('/\+?\d{9,13}/', $message, $phone)){
+        $lead = "🔥 YANGI LEAD\nIsm: $name\nRaqam: ".$phone[0]."\nXabar: $message";
+        sendMessage($ADMIN_CHAT_ID, $lead);
 
-    bot.send_message(message.chat.id, response.output_text)
+        sendMessage($chat_id, "✅ Raqamingiz qabul qilindi! Tez orada bog‘lanamiz.");
+    }
+}
 
-print("AI SALES BOT ishlayapti...")
-bot.infinity_polling()
-bot.polling()
+?>
