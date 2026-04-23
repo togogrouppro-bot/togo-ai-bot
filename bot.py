@@ -133,6 +133,35 @@ def handle_photo(message):
     )
 
     bot.send_message(message.chat.id, response['choices'][0]['message']['content'])
+from openai import OpenAI
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    bot.send_message(message.chat.id, "⏳ Rasmni analiz qilyapman...")
+
+    file_info = bot.get_file(message.photo[-1].file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    with open("image.jpg", "wb") as f:
+        f.write(downloaded_file)
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Bu rasmda nima bor? Qisqa va aniq ayt."},
+                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + downloaded_file.hex()}}
+                ]}
+            ]
+        )
+
+        answer = response.choices[0].message.content
+        bot.send_message(message.chat.id, f"📸 Natija:\n{answer}")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
 
 bot.polling()
